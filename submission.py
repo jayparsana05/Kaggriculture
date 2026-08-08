@@ -115,7 +115,8 @@ P_DIG_SPENT    = 7800
 P_PLANT        = 7000
 P_DIG_WEED     = 6400
 
-_PRICE_HIST = {}        # product -> (day, price) recorded at hour 0
+_PRICE_HIST = {}        # product -> [(day, price), ...] recorded at hour 0
+PREMIUM = {"STRAWBERRY", "MELON", "MILK", "WOOL"}   # glut-sensitive products
 
 
 # ============================================================================
@@ -208,11 +209,35 @@ def drain_between(day, product, days, town):
     return total
 
 
-def project_price(item, inv, day, days, town, opp_rate, params):
-    """Expected price `days` from now given town drain and opponent sales."""
+def project_price(item, inv, day, days, town, opp_rate, params, my_rate=0.0):
+    """Expected price `days` from now given town drain and total supply
+    pressure (opponent sales + our own committed future production)."""
     drain = drain_between(day, item, days, town)
-    inv_f = max(1.0, inv - drain + opp_rate * days)
+    inv_f = max(1.0, inv - drain + (opp_rate + my_rate) * days)
     return price_at(item, inv_f, params)
+
+
+def price_trend(item, day):
+    """Per-day price velocity from the recorded history (last 3 points).
+    Returns None when there is not enough data."""
+    hist = _PRICE_HIST.get(item)
+    if not hist or len(hist) < 2:
+        return None
+    pts = [p for (d, p) in hist if d < day]
+    if len(pts) < 2:
+        return None
+    span = max(1, hist[-1][0] - hist[-2][0])
+    return (hist[-1][1] - hist[-2][1]) / span
+
+
+def expected_cash_value(item, qty, horizon_days, day, prices, inv, town,
+                        opp_rate, params, my_rate=0.0):
+    """Expected cash from holding `qty` units and selling over the next
+    `horizon_days` at the projected (drained) price, vs the marginal sell-out
+    now.  Returns (hold_value, sell_now_value) per unit."""
+    est = project_price(item, inv.get(item, params[item]["I0"]), day,
+                        horizon_days, town, opp_rate, params, my_rate)
+    return est, batch_avg(item, qty, inv.get(item, params[item]["I0"]), params)
 
 
 # ============================================================================
@@ -227,6 +252,52 @@ def _productions_remaining(crop, planted_day, day):
     return n
 
 
+def _animal_prods_left(animal, placed_day, day):
+    """Production ticks still coming from a placed animal (fed+cared)."""
+    n = 0
+    k = 0
+    while True:
+        nd = placed_day + ANIMAL_FIRST[animal] + k * ANIMAL_INTERVAL[animal]
+        if nd > LAST_HARVEST:
+            break
+        if nd > day:
+            n += 1
+        k += 1
+    return n
+
+
+def committed_units(farm_state, day, product):
+    """Total units of `product` our farm is already committed to produce
+    (existing plants' remaining yield + placed animals' remaining output)."""
+    total = 0.0
+    for (x, y, t) in farm_state["plants"]:
+        if t["crop"] != product:
+            continue
+        if ONGOING[product]:
+            total += _productions_remaining(product, t["planted_day"], day)
+        else:
+            rem = max(0, t.get("yield_units", 0))
+            start = (MAX_YIELD_DAY[product] + 1) // 2
+            for wd in range(max(start, day + 1), MAX_YIELD_DAY[product] + 1):
+                if wd <= LAST_HARVEST:
+                    rem += 1
+            total += rem
+    for (x, y, t) in farm_state["animal_tiles"]:
+        a = t["animal"]
+        if ANIMAL_PRODUCT[a] == product:
+            total += _animal_prods_left(a, t.get("placed_day", day), day) * 2.0
+    return total
+
+
+def my_supply_rates(farm_state, day):
+    """Units/day of each product our committed assets will add to the market."""
+    days_left = max(1, LAST_DAY - day)
+    rates = {}
+    for p in PRODUCTS:
+        rates[p] = committed_units(farm_state, day, p) / days_left
+    return rates
+
+
 def analyze_farm(farm, day):
     tiles = farm["tiles"]
     size = len(tiles)
@@ -239,6 +310,7 @@ def analyze_farm(farm, day):
         "unwatered": 0, "unwatered_at_risk": 0,
         "unfed": 0, "unfed_at_risk": 0,
         "plants": [],         # (x, y, tile)
+        "animal_tiles": [],   # (x, y, tile)
         "n_animals": 0,
     }
     for y in range(size):
@@ -263,6 +335,7 @@ def analyze_farm(farm, day):
             elif "animal" in t:
                 out["animal_counts"][t["animal"]] += 1
                 out["n_animals"] += 1
+                out["animal_tiles"].append((x, y, t))
                 if not t.get("fed_today", False):
                     out["unfed"] += 1
                     if t.get("consecutive_unfed", 0) >= 1:
@@ -351,7 +424,7 @@ def _fert_marginal(crop, day, prices, params):
     return added * est_p - prices.get("FERTILIZER", BASE_PRICE["FERTILIZER"])
 
 
-def wave_profit(crop, day, prices, inv, params, town, opp):
+def wave_profit(crop, day, prices, inv, params, town, opp, my_rate=0.0):
     """Expected profit of one wave of `crop` planted today (per tile)."""
     if not can_finish(crop, day):
         return -1e9
@@ -360,8 +433,14 @@ def wave_profit(crop, day, prices, inv, params, town, opp):
     if units <= 0:
         return -1e9
     horizon = FIRST_YIELD[crop] if ONGOING[crop] else MAX_YIELD_DAY[crop]
-    est_p = project_price(crop, inv.get(crop, 10000), day, horizon, town,
-                          opp.get("daily_rate", {}).get(crop, 0.0), params)
+    est_p = project_price(crop, inv.get(crop, params[crop]["I0"]), day,
+                          horizon, town, opp.get("daily_rate", {}).get(crop, 0.0),
+                          params, my_rate)
+    if crop == "WHEAT":
+        # Wheat is mostly feed, not market supply: our committed wheat never
+        # hits the market, so value it at the replacement cost of buying feed
+        # rather than at its (glut-depressed) projected sale price.
+        est_p = max(est_p, prices.get("WHEAT", BASE_PRICE["WHEAT"]) * 0.6)
     revenue = units * est_p
     fert_cost = 0.0
     if with_fert:
@@ -377,15 +456,37 @@ def _waves_left(crop, day):
     return max(1, (LAST_DAY - day) // (MAX_YIELD_DAY[crop] + 2))
 
 
-def allowance_tiles(crop, day, prices, inv, params, town, opp):
-    """Max tiles of `crop` we may plant without self-crashing the market,
-    given remaining town demand and opponent production."""
+def allowance_tiles(crop, day, prices, inv, params, town, opp, my_rate=0.0):
+    """Max tiles of `crop` we may plant without self-crashing the market.
+
+    safe future capacity = tolerance + remaining town drain
+                          - opponent supply - our committed supply
+                          - current market surplus above I0
+    """
+    I0 = params[crop]["I0"]
     tol = glut_tolerance(crop, params)
     drain_rem = drain_between(day, crop, LAST_DAY - day, town)
     opp_est = opp["daily_rate"].get(crop, 0.0) * (LAST_DAY - day)
-    allowance = max(30.0, tol + drain_rem - opp_est)
+    my_units = my_rate * (LAST_DAY - day)
+    surplus = max(0, inv.get(crop, I0) - I0)
+    safe_units = tol + drain_rem - opp_est - my_units - surplus
     per_tile = max(1, units_estimate(crop, day, False) * _waves_left(crop, day))
-    return max(1.0, allowance / per_tile)
+    return max(1.0, safe_units / per_tile)
+
+
+def _tile_demand(t, day):
+    """Estimated actions/day needed to keep `t` (a plant tile) productive:
+    ongoing crops demand water+harvest while productions remain; one-time
+    crops demand water only inside their bonus window and then just a
+    harvest."""
+    c = t["crop"]
+    if ONGOING[c]:
+        if _productions_remaining(c, t["planted_day"], day) > 0:
+            return 2.2
+        return 0.3                     # spent: just a DIG
+    if day >= MAX_YIELD_DAY[c]:
+        return 0.8                     # matured: harvest only
+    return 2.2                         # growing phase
 
 
 def crop_plan(farm_state, market_state, opp, day, prices, inv, params, money,
@@ -396,17 +497,41 @@ def crop_plan(farm_state, market_state, opp, day, prices, inv, params, money,
         return {"crops": {}, "ranked": [], "profit": {}, "fert_reserve": 0,
                 "tiles_avail": 0}
 
-    # Labor cap: every tile costs ~1 action/day (water/harvest/fert); keep the
-    # farm at a size the hired crew can actually care for.  Existing plants
-    # count against the cap.
-    labor_cap = 30 if day <= 10 else (26 if day <= 20 else 20)
-    in_field = sum(farm_state["crop_counts"].values())
-    tiles_avail = min(tiles_avail, max(0, labor_cap - in_field))
+    # Labor capacity: estimate the farm's real action demand (watering,
+    # harvesting, planting, fertilizing, feeding, caring, movement) and gate
+    # new plantings on the spare capacity of the hired crew.  Count the hands
+    # we are about to hire today (hired hands work from tomorrow).
+    n_units = farm_state.get("n_units", 1)
+    if money >= 2500:
+        planned = 6
+    elif money >= 1200:
+        planned = 5
+    elif money >= 600:
+        planned = 4
+    elif money >= 200:
+        planned = 3
+    else:
+        planned = 2
+    n_units = min(HANDS_MAX + 1, max(n_units, 1 + planned))
+    capacity = n_units * ACTIONS_PER_HAND
+    demand_now = 5.0
+    for (x, y, t) in farm_state["plants"]:
+        demand_now += _tile_demand(t, day)
+    demand_now += farm_state["n_animals"] * 3.0
+    labor_spare = capacity - demand_now
+    # A short overload is fine: one-time crops (melons) fall out of their
+    # water window at day 12, freeing labor again.  Allow ~half a unit of
+    # temporary over-commit so premium plantings are not starved during the
+    # melon window.  The plan blocks are priority-ordered, so wheat/carrot
+    # only benefit from true spare.
+    tiles_avail = min(tiles_avail, max(0, int((labor_spare + 12.0) / 2.2)))
 
     # Seasonality: crops whose payoff window has passed are never worth
     # planting this late.
     late_skip = {"MELON": 9, "TOMATO": 20, "STRAWBERRY": 22,
                  "CARROT": 24, "WHEAT": 27}
+
+    my_rate = my_supply_rates(farm_state, day)
 
     profits = {}
     horizon = {}
@@ -417,7 +542,8 @@ def crop_plan(farm_state, market_state, opp, day, prices, inv, params, money,
         # staple wheat (its floor price is all we ever get anyway).
         if c != "WHEAT" and prices.get(c, BASE_PRICE[c]) < 0.6 * BASE_PRICE[c]:
             continue
-        profits[c] = wave_profit(c, day, prices, inv, params, market_state["town"], opp)
+        profits[c] = wave_profit(c, day, prices, inv, params,
+                                 market_state["town"], opp, my_rate.get(c, 0.0))
         horizon[c] = FIRST_YIELD[c] if ONGOING[c] else MAX_YIELD_DAY[c]
     ranked = [c for c in CROPS_LIST if profits.get(c, 0) > 0]
     ranked.sort(key=lambda c: profits[c] / max(1, horizon[c]), reverse=True)
@@ -427,9 +553,11 @@ def crop_plan(farm_state, market_state, opp, day, prices, inv, params, money,
 
     # Early-game cash block: cheap fast crops so money arrives in time for
     # land and animals.  Wheat/carrot pay out from day 2-4 while premium
-    # crops sit dormant until day 8-13.
+    # crops sit dormant until day 8-13.  Only relevant for the first days:
+    # by day 5 melons are in their water window and no longer need cheap
+    # cash-flow crops competing for the same tiles.
     cheap = [c for c in ("WHEAT", "CARROT") if profits.get(c, 0) > 0]
-    if day <= 6 and money < 2500 and cheap:
+    if day <= 4 and money < 2500 and cheap:
         n_cheap = max(4, int(tiles_avail * 0.35))
         for c in cheap:
             if n_cheap <= 0:
@@ -443,7 +571,8 @@ def crop_plan(farm_state, market_state, opp, day, prices, inv, params, money,
         if remaining <= 0:
             break
         cap = min(allowance_tiles(c, day, prices, inv, params,
-                                  market_state["town"], opp), HARD_CAPS[c])
+                                  market_state["town"], opp, my_rate.get(c, 0.0)),
+                  HARD_CAPS[c])
         take = int(min(cap, remaining))
         if take <= 0:
             continue
@@ -467,20 +596,45 @@ def crop_plan(farm_state, market_state, opp, day, prices, inv, params, money,
 
     return {"crops": plan, "ranked": ranked, "profit": profits,
             "fert_reserve": min(fert_reserve, FERT_USE_MAX * 2),
-            "tiles_avail": tiles_avail}
+            "tiles_avail": tiles_avail, "labor_spare": labor_spare,
+            "labor_capacity": capacity}
 
 
 # ============================================================================
 # Animal economics
 # ============================================================================
-def animal_value(animal, day, prices, wheat_cost, fert_est):
-    days_left = LAST_HARVEST - day - ANIMAL_FIRST[animal]
-    if days_left <= 2:
+def animal_value(animal, day, prices, wheat_cost, fert_est, farm_state,
+                 market_state, opp, inv, params):
+    """Expected net contribution of buying `animal` today.
+
+    revenue      = production ticks x (base + CARE bonus) x projected price
+    costs        = feed wheat + labor (feed/care/harvest/build/placement)
+                 + animal capital
+    plus         = fertilizer collection value
+    The market projection includes the opponent's and our own committed
+    supply, so milk/wool/egg gluts damp animal profitability too.
+    """
+    placed_day = day + 1
+    n_prod = _animal_prods_left(animal, placed_day, day)
+    if n_prod <= 1:
         return -1e9
     p = ANIMAL_PRODUCT[animal]
-    prod_per_day = 1.0 + 1.0 / ANIMAL_INTERVAL[animal]     # with daily care
-    daily = prices.get(p, BASE_PRICE[p]) * prod_per_day + fert_est - wheat_cost
-    return daily * days_left * 0.85 - ANIMAL_COST[animal]
+    base_rate = 1.0 / ANIMAL_INTERVAL[animal]     # base units/day
+    care_rate = 1.0 / ANIMAL_INTERVAL[animal]     # +1 unit per production day
+    days_alive = max(1, int(n_prod * ANIMAL_INTERVAL[animal]))
+    horizon = min(LAST_HARVEST - day, days_alive)
+    town = market_state["town"]
+    my_rate = my_supply_rates(farm_state, day).get(p, 0.0) \
+        + base_rate + care_rate
+    opp_rate = opp["daily_rate"].get(p, 0.0)
+    est_p = project_price(p, inv.get(p, params[p]["I0"]), day, horizon,
+                          town, opp_rate, params, my_rate)
+    revenue = n_prod * (base_rate + care_rate) * est_p
+    feed_cost = days_alive * wheat_cost
+    labor_cost = (days_alive * 2.0 + n_prod + 10.0) * LABOR_VALUE
+    fert_value = fert_est * days_alive * 0.5
+    return (revenue + fert_value - feed_cost - labor_cost) * 0.85 \
+        - ANIMAL_COST[animal]
 
 
 def animal_plan(farm_state, market_state, opp, day, prices, inv, params, money, slots):
@@ -523,7 +677,8 @@ def animal_plan(farm_state, market_state, opp, day, prices, inv, params, money, 
         min_day = 4 if a == "GOOSE" else (8 if a == "COW" else 9)
         if day < min_day:
             continue
-        val = animal_value(a, day, prices, wheat_price * 0.9, fert_est)
+        val = animal_value(a, day, prices, wheat_price * 0.9, fert_est,
+                           farm_state, market_state, opp, inv, params)
         if val < ANIMAL_COST[a] * 0.5:
             continue
         if total_animals >= placement_room:
@@ -579,22 +734,32 @@ def sell_plan(farm_state, market_state, opp, day, prices, inv, params):
         if q <= 0:
             continue
         price = prices.get(p, BASE_PRICE[p])
-        inv_p = inv.get(p, 10000)
+        inv_p = inv.get(p, params[p]["I0"])
+        trend = price_trend(p, day)
 
         if forced or cash_need:
             n = q
         else:
             drain = town_rate(day, p, market_state["town"])
             opp_sell = opp["daily_rate"].get(p, 0.0)
-            per_turn = max(0.0, drain - opp_sell) / 24.0
+            my_sell = my_supply_rates(farm_state, day).get(p, 0.0)
+            per_turn = max(0.0, drain - opp_sell - my_sell) / 24.0
             pace = q / max(1.0, days_left * 24.0)      # shed empties by endgame
-            if price >= BASE_PRICE[p] or inv_p < 10000:
+            if price >= BASE_PRICE[p]:
                 n = min(q, pace + per_turn + 0.5)
             elif price >= 0.8 * BASE_PRICE[p]:
                 n = min(q, (pace + per_turn) * 0.7)
             else:
                 # crashed to the floor: price will not recover, dump it
                 n = q
+            # Price-trend adjustment: recoveries deserve a hold (unless the
+            # product's curve is a premium one that collapses on gluts),
+            # deteriorating markets deserve faster exit.
+            if trend is not None and price < BASE_PRICE[p]:
+                if trend > 2.0 and p not in PREMIUM:
+                    n *= 0.5
+                elif trend < -2.0:
+                    n = min(q, max(n, (pace + per_turn) * 1.5))
             n = min(n, _safe_batch(p, q, inv_p, params, price))
             n = max(1.0, n)
         if n >= 1:
@@ -680,23 +845,42 @@ def wheat_buy_plan(farm_state, market_state, prices, money, slots):
     return orders
 
 
-def hire_plan(farm_state, market_state, day, hour, money, slots, plan_value_per_action):
+def hire_plan(farm_state, market_state, day, hour, money, slots,
+              plan_value_per_action, labor_spare=None, labor_capacity=None):
     orders = []
     if day >= 29 or hour >= HIRE_HOUR_CUT or slots <= 0 or money < 60:
         return orders
-    target = HANDS_MAX
-    if plan_value_per_action is not None and plan_value_per_action < HAND_VALUE_MIN:
-        target = 3
-    elif money < 200:
-        target = 2
-    elif money < 600:
-        target = 3
-    elif money < 1200:
-        target = 4
-    elif money < 2500:
-        target = 5
-
     hires_today = farm_state["hires_today"]
+    overload = 0.0
+    if labor_spare is not None and labor_capacity is not None:
+        overload = max(0.0, -labor_spare)
+
+    # Economic target: hire hands while the marginal hand's output (about
+    # ACTIONS_PER_HAND effective actions/day of the marginal task value) beats
+    # its Fibonacci wage.  No estimate -> fall back to a cash-tiered ramp.
+    target = 0
+    if plan_value_per_action is not None and plan_value_per_action > 0:
+        while target < HANDS_MAX:
+            cost = FIB[min(target, len(FIB) - 1)]
+            if ACTIONS_PER_HAND * plan_value_per_action * 0.6 < cost:
+                break
+            target += 1
+    if target < 2 or plan_value_per_action is None:
+        if money < 200:
+            target = max(target, 2)
+        elif money < 600:
+            target = max(target, 3)
+        elif money < 1200:
+            target = max(target, 4)
+        elif money < 2500:
+            target = max(target, 5)
+        else:
+            target = max(target, 6)
+    # Overloaded farm: tasks are waiting in a queue, extra hands are pure win
+    if overload >= ACTIONS_PER_HAND and plan_value_per_action is not None \
+            and plan_value_per_action > HAND_VALUE_MIN:
+        target = HANDS_MAX
+
     while hires_today < target and slots > 0:
         cost = FIB[min(hires_today, len(FIB) - 1)]
         if money - cost < CASH_FLOOR:
@@ -708,7 +892,8 @@ def hire_plan(farm_state, market_state, day, hour, money, slots, plan_value_per_
     return orders
 
 
-def land_plan(farm_state, market_state, day, money, slots, marginal_tile_profit):
+def land_plan(farm_state, market_state, day, money, slots, marginal_tile_profit,
+              labor_spare=None, labor_capacity=None):
     orders = []
     n_extra = max(0, len(market_state["unlocked"]) - 1)
     if n_extra >= 3 or day > LAND_LAST_DAY or slots <= 0:
@@ -723,7 +908,16 @@ def land_plan(farm_state, market_state, day, money, slots, marginal_tile_profit)
     pending = sum(market_state["shed"].get(a, 0) for a in ANIMALS_LIST)
     if day >= 12 and (pending > 0 or farm_state["n_animals"] > 0):
         return orders
-    gain = 25 * marginal_tile_profit * 0.55      # discount: travel/labor/weeds
+    # ROI: 25 new tiles x marginal profit, scaled by how much season remains
+    # (a quadrant bought late has fewer harvest waves) and by available labor
+    # (an already-overloaded farm cannot tend new land, so discount it).
+    remaining = max(1, LAST_DAY - day + 1)
+    horizon_factor = min(1.0, remaining / 14.0)
+    gain = 25 * marginal_tile_profit * 0.55 * horizon_factor
+    if labor_capacity is not None and labor_spare is not None:
+        new_land_actions = 25 * 2.5
+        if labor_spare < new_land_actions:
+            gain *= max(0.3, labor_spare / new_land_actions)
     used = sum(farm_state["crop_counts"].values()) + farm_state["n_animals"] \
         + farm_state["empty_coop"] + farm_state["empty_pasture"]
     usable = 25 * len(market_state["unlocked"]) - 4    # shed overlaps board
@@ -895,11 +1089,14 @@ def build_tasks(farm, farm_state, plan, market_state, day, prices):
                     tasks.append((x, y, "COLLECT", crop,
                                   P_COLLECT + _value_bonus(
                                       prices.get("FERTILIZER", 100))))
-                elif not t.get("cared_today", False):
+                elif not t.get("cared_today", False) and t.get("fed_today", False):
                     p = ANIMAL_PRODUCT[crop]
-                    tasks.append((x, y, "CARE", crop,
-                                  P_CARE + _value_bonus(
-                                      prices.get(p, BASE_PRICE[p]) * 0.7)))
+                    if _animal_prods_left(crop, t.get("placed_day", day), day) > 0 \
+                            and prices.get(p, BASE_PRICE[p]) \
+                            / ANIMAL_INTERVAL[crop] > LABOR_VALUE:
+                        tasks.append((x, y, "CARE", crop,
+                                      P_CARE + _value_bonus(
+                                          prices.get(p, BASE_PRICE[p]) * 0.7)))
             elif t.get("kind") in ("COOP", "PASTURE") and "animal" not in t:
                 for a in ANIMALS_LIST:
                     if ANIMAL_STRUCT[a] == t["kind"]:
@@ -1059,7 +1256,11 @@ def unit_action(ux, uy, tile, my_inv, farm_state, market_state, plan,
             if tile.get("fertilizer_available", False) \
                     and _fert_needed(market_state) > 0:
                 return ["COLLECT"]
-            if not tile.get("cared_today", False):
+            if not tile.get("cared_today", False) and tile.get("fed_today", False) \
+                    and _animal_prods_left(crop, tile.get("placed_day", day), day) > 0 \
+                    and prices.get(ANIMAL_PRODUCT[crop],
+                                   BASE_PRICE[ANIMAL_PRODUCT[crop]]) \
+                    / ANIMAL_INTERVAL[crop] > LABOR_VALUE:
                 return ["CARE"]
         elif kind in ("COOP", "PASTURE") and "animal" not in tile:
             for a in ANIMALS_LIST:
@@ -1161,6 +1362,7 @@ def agent(obs, config=None):
     farm_state = analyze_farm(farm, day)
     farm_state["seeds"] = seeds
     farm_state["hires_today"] = hires_today
+    farm_state["n_units"] = 1 + len(farm.get("hands", []) or [])
 
     opp = analyze_opponent(farms, player, day)
 
@@ -1178,9 +1380,14 @@ def agent(obs, config=None):
     }
 
     if hour == 0:
+        if day == 0:
+            _PRICE_HIST.clear()
         for p in PRODUCTS:
             if p in prices:
-                _PRICE_HIST[p] = (day, prices[p])
+                hist = _PRICE_HIST.setdefault(p, [])
+                if not hist or hist[-1][0] < day:
+                    hist.append((day, prices[p]))
+                hist[:] = hist[-6:]
 
     plan = crop_plan(farm_state, market_state, opp, day, prices, inv,
                      params, money)
@@ -1210,7 +1417,8 @@ def agent(obs, config=None):
 
     # ---- hire first: hands are the cheapest labor in the game --------------
     hire_orders = hire_plan(farm_state, market_state, day, hour, money_proj,
-                            slots, plan_value_per_action)
+                            slots, plan_value_per_action,
+                            plan.get("labor_spare"), plan.get("labor_capacity"))
     orders.extend(hire_orders)
     slots -= len(hire_orders)
 
@@ -1218,7 +1426,8 @@ def agent(obs, config=None):
     profits = [plan["profit"].get(c, 0) for c in plan["crops"]]
     marginal_tile_profit = min(profits) if profits else 0
     land_orders = land_plan(farm_state, market_state, day, money_proj, slots,
-                            marginal_tile_profit)
+                            marginal_tile_profit,
+                            plan.get("labor_spare"), plan.get("labor_capacity"))
     if land_orders:
         n_extra = max(0, len(market_state["unlocked"]) - 1)
         money_proj -= LAND_CASH[n_extra]
