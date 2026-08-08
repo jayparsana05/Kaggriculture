@@ -1,0 +1,45 @@
+# Kaggriculture
+
+Create an agent to play in this farming simulation and compete with others to maximize your income.
+
+---
+
+## Overview
+
+In this competition, you will design, build, and deploy an autonomous AI agent to manage a virtual farm, navigate a dynamic economy, and compete head-to-head against other agents on a live leaderboard.
+
+### Description
+
+This simulation competition is a turn-based farming game where two players compete on separate farms to see who can earn the most profit by the end of a 30-day season (720 turns).
+
+Your agent acts as the main farmer and can strategically hire farm hands to scale up operations. To succeed, your agent must:
+- Plant, water, fertilize, and harvest a variety of crops.
+- Buy, feed, and care for animals to produce eggs, milk, and wool.
+- Collect and utilize fertilizer to boost crop yields.
+- Buy neighboring quadrants of land to expand your farm's footprint.
+- Trade smart on a dynamic market where prices react to your sales and town demand.
+
+Kaggriculture represents a highly complex environment that models the exact```text
+Kaggriculture Overview
+
+Game Mechanics & Rules:
+- Mode: Turn-based strategy game for two players competing on individual farms across a 30-day season (720 turns).
+- Goal: Maximize final bank balance.
+- Grid: Starts on a 10x10 board divided into four 5x5 quadrants. Players start with 1 quadrant and can purchase additional quadrants for $1,000, $2,000, and $4,000.
+- Shed: A central 2x2 area storing up to 100 non-seed items. Items exceeding this capacity are lost upon deposit.
+- Labor: Players use an agent farmer and can hire temporary farm hands per turn. Hiring costs increase within a single day following a Fibonacci multiplier schedule. Farm hands disappear at the end of each day.
+
+Objects & Production:
+- Crops: One-time crops (Wheat, Carrot, Melon) and ongoing crops (Tomato, Strawberry). Daily watering is required; missing two consecutive days turns crops into weeds.
+- Animals: Geese (Eggs), Cows (Milk), Sheep (Wool). Animals must be fed wheat daily or they escape after two consecutive unfed days. Animals generate fertilizer daily.
+- Fertilizer & Care: Applying fertilizer boosts crop harvest yields. Animal care banks a bonus payout for subsequent yields.
+
+Market & Demand:
+- Market Actions: Up to 10 market orders allowed per turn (buying seeds/animals, selling harvested goods, purchasing land, or hiring hands).
+- Dynamic Pricing: Resource sales influence global supply levels and market prices.
+- Town Demand: Periodic shop unlocks introduce automatic consumption of specific goods, driving resource demand over time.
+
+Evaluation & Submissions:
+- Submission Limit: Maximum of 5 agent uploads per day.
+- Matchmaking: Only the 2 most recent submissions actively compete on the ladder against agents with similar skill ratings.
+- Validation: Each submission undergoes an initial automated validation match to verify error-free execution.

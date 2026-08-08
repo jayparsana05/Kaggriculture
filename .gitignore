@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Kaggle / Simulation output logs & replays
+env_steps.json
+replay.html
+*.log
+tools/
+
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Distribution / packaging / cache
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
