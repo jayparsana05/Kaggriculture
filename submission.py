@@ -74,7 +74,7 @@ ANIMAL_CAPS       = {"GOOSE": 10, "COW": 4, "SHEEP": 2}
 FERT_PRICE_MIN    = 62
 FERT_USE_MAX      = 8
 
-HARD_CAPS = {"WHEAT": 60, "CARROT": 30, "TOMATO": 10,
+HARD_CAPS = {"WHEAT": 60, "CARROT": 0, "TOMATO": 10,
              "STRAWBERRY": 16, "MELON": 16}
 
 ENDGAME_DAY   = 27
@@ -2122,7 +2122,7 @@ def agent(obs, config=None):
             # this in two days with a full strawberry field; force the same
             # here and let the allocator's deltas choose the tomato/wheat
             # balance on the tiles that remain.
-            hard_start = {"STRAWBERRY": 16}
+            hard_start = {}
         try:
             plan = capital_allocator(farm_state, market_state, opp, day,
                                      prices, inv, params, money,
