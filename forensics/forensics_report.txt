@@ -1,0 +1,219 @@
+==============================================================================
+KAGGRICULTURE ECONOMIC FORENSICS REPORT
+current bot: submission.py (v5.5 line-up: day-13 hard-start S16, caps S16/T10, fertilizer buying disabled)
+baseline:    v5.2 (ab_A.py)
+opponent:    built-in 'pass' agent (no market activity, 0 sales)
+sample:      24 seeds (0..23), deterministic per seed
+==============================================================================
+
+CURRENT AVERAGE:   46822
+CURRENT MEDIAN:    46864
+CURRENT BEST:      48037
+CURRENT WORST:     45679
+CURRENT STD DEV:   706
+v5.2 AVERAGE:      36147
+CURRENT VS v5.2:   +10676 per seed avg (current +29.5%)
+
+==============================================================================
+2. BENCHMARK SUMMARY (24 seeds)
+==============================================================================
+seed   current    v5.2      delta
+   0     45819     36761     +9058
+   1     45679     34228    +11451
+   2     46754     39381     +7373
+   3     48037     35861    +12176
+   4     45860     37330     +8530
+   5     45679     34713    +10966
+   6     46786     39807     +6979
+   7     47019     35225    +11794
+   8     47666     35272    +12394
+   9     45716     34762    +10954
+  10     47001     35073    +11928
+  11     46512     40530     +5982
+  12     47976     37103    +10873
+  13     46817     34651    +12166
+  14     46432     34380    +12052
+  15     46721     37151     +9570
+  16     47431     34866    +12565
+  17     46197     35785    +10412
+  18     47061     37499     +9562
+  19     47122     32192    +14930
+  20     47567     36849    +10718
+  21     46912     32902    +14010
+  22     47521     36570    +10951
+  23     47449     38628     +8821
+wins (current > v5.2): 24 / 24
+
+==============================================================================
+14. SEED VARIANCE ANALYSIS
+==============================================================================
+current  mean   46822  median   46864  min   45679  max   48037  sd    706  P10  45716 P25  46197 P50  46817 P75  47431 P90  47567
+v5.2     mean   36147  median   35823  min   32192  max   40530  sd   2033  P10  34228 P25  34713 P50  35785 P75  37151 P90  38628
+
+seed-2 v5.2 = 39,381 is +3234 vs v5.2 mean (+1.6 sd); current seed-2 = 46754 (-0.1 sd).
+determinism: each seed is one fixed trajectory; seed-2's v5.2 score is a single draw, not a distribution.
+
+==============================================================================
+3. ECONOMIC LEDGER (24-seed averages, exact — balance error == 0 on every episode)
+==============================================================================
+item                              current       v5.2
+STARTING CASH                        3000       3000
+crop sales WHEAT                     2679      25745
+crop sales CARROT                     126          0
+crop sales TOMATO                    1545        719
+crop sales STRAWBERRY                4050      16370
+crop sales MELON                    42689      21386
+animal sales EGG/MILK/WOOL              0       7255
+TOTAL REVENUE                       51088      71474
+seed costs                          -5617      -3023
+fertilizer bought                      -0      -5706
+feed wheat bought                      -0     -27310
+animal costs                           -0      -3933
+worker (HIRE) costs                  -482       -550
+land costs                          -1167          0
+TOTAL COSTS                         -7266     -40522
+FINAL BANK                          46822      36147
+UNKNOWN expenses: none — every cash flow goes through market orders/HIRE/BUY_LAND, all recorded.
+
+4. CAPITAL EFFICIENCY (24-seed averages)
+==============================================================================
+current  capital deployed    7266 | revenue   51088 | final/starting 15.61 | revenue/capital  7.03 | profit/capital  6.03
+v5.2     capital deployed   40522 | revenue   71474 | final/starting 12.05 | revenue/capital  1.76 | profit/capital  0.82
+
+==============================================================================
+5. CROP ECONOMIC REPORT (24-seed averages)
+==============================================================================
+crop        tiles tile-days  seeds$  fert$ labor-act   prod  sold  avgpx    rev$    net$ $/tile-day  $/act $/invested
+WHEAT         4.5     136.3     358      0        44     82    82     33    2679    2321      17.03  52.85       6.48
+CARROT        0.7      20.8     130      0         6      4     3     42     126      -4      -0.20  -0.66      -0.03
+TOMATO        3.4     101.0     556      0        23     20    17     89    1545     989       9.79  43.78       1.78
+STRAWBERRY    5.7     170.2    2012      0        48     22    16    249    4050    2037      11.97  42.07       1.01
+MELON        12.7     381.4    2560      0        31    174   173    246   42689   40129     105.22 1291.00      15.68
+fert$ = FERTILIZER spend weighted by FERTILIZE-action share per crop (ESTIMATE).
+
+==============================================================================
+6. ANIMAL ECONOMIC REPORT (24-seed averages)
+==============================================================================
+GOOSE  bought  0.0 cost     0 produced   0.0 sold  0.0 avgpx     0 rev      0 feed   0.0 care  0.0 fert-collect  0.0 feed$     0 net      0 ROI  0.00
+COW    bought  0.0 cost     0 produced   0.0 sold  0.0 avgpx     0 rev      0 feed   0.0 care  0.0 fert-collect  0.0 feed$     0 net      0 ROI  0.00
+SHEEP  bought  0.0 cost     0 produced   0.0 sold  0.0 avgpx     0 rev      0 feed   0.0 care  0.0 fert-collect  0.0 feed$     0 net      0 ROI  0.00
+
+==============================================================================
+7. LAND EXPANSION REPORT (24-seed averages)
+==============================================================================
+NE: purchased by 24/24 seeds, day 14.2 (min 14, max 16), cost $1000 (1000/2000/4000), final occupied tiles 1.9/25
+SW: purchased by 2/24 seeds, day 16.0 (min 16, max 16), cost $2000 (1000/2000/4000), final occupied tiles 4.0/25
+SE: never purchased
+per-seed: seed0:NE@d16, seed1:NE@d16, seed2:NE@d14, seed3:NE@d14, seed4:NE@d14,SW@d16, seed5:NE@d16, seed6:NE@d14, seed7:NE@d14, seed8:NE@d14, seed9:NE@d14,SW@d16, seed10:NE@d14, seed11:NE@d14, seed12:NE@d14, seed13:NE@d14, seed14:NE@d14, seed15:NE@d14, seed16:NE@d14, seed17:NE@d14, seed18:NE@d14, seed19:NE@d14, seed20:NE@d14, seed21:NE@d14, seed22:NE@d14, seed23:NE@d14
+land utilization: unlocked-tile-days occupied (see section 13).
+
+==============================================================================
+8. LABOR UTILIZATION REPORT (24-seed averages)
+==============================================================================
+current  crew-days    175 | actions   4048 of   4194 available (units act every turn) | idle(PASS)    675 (16.1%) | movement   2144 (51.1%) | productive   1229 (29.3%)
+v5.2     crew-days    198 | actions   4579 of   4760 available (units act every turn) | idle(PASS)   1005 (21.1%) | movement   2118 (44.5%) | productive   1455 (30.6%)
+note: PASS can also occur while a unit carries no useful work (walking counts as MOVE only when a MOVE op was issued).
+
+==============================================================================
+9. MARKET ANALYSIS (24-seed averages; town drain exact, inventory/price samples at day start)
+==============================================================================
+item         base  drain our sold  our rev avg sale px  px min  px max  px avg  inv avg floor-sales
+WHEAT          25    610       82     2679          33      23      49      35     9859           0
+CARROT         35    454        3      126          42      35      42      40     9852           0
+TOMATO         60    328       17     1545          89      60     104      72     9898           0
+STRAWBERRY    120    522       16     4050         248     120     322     210     9843           0
+MELON         250    140      173    42689         246     208     281     255    10009           0
+EGG            50    331        0        0           0      50      75      56     9897           0
+MILK          160    432        0        0           0     160     363     247     9864           0
+WOOL          200    352        0        0           0     200     252     234     9884           0
+opponent sales: 0 (pass opponent).  Our sales vs town drain => share of market absorption.
+
+==============================================================================
+10. SELLING STRATEGY (24-seed totals, from exact sale records)
+==============================================================================
+WHEAT       first sale d5 last sale d29  qty  1969 rev    64295 avg    33  sold on final day:  106 ( 5.4%)
+CARROT      first sale d29 last sale d29  qty    72 rev     3019 avg    42  sold on final day:   72 (100.0%)
+TOMATO      first sale d24 last sale d29  qty   416 rev    37081 avg    89  sold on final day:   14 ( 3.4%)
+STRAWBERRY  first sale d13 last sale d29  qty   390 rev    97190 avg   249  sold on final day:   86 (22.1%)
+MELON       first sale d13 last sale d27  qty  4158 rev  1024529 avg   246  sold on final day:    0 ( 0.0%)
+(totals across all 24 seeds; avg/seed = qty/24, rev/24)
+
+SHED-CAP OVERFLOW LOSSES (avg units discarded per episode, 24 seeds; the shed holds 100)
+WHEAT       discarded    0.0 units/episode x avg sale px    33 = $       0 (ESTIMATE)
+CARROT      discarded    0.0 units/episode x avg sale px    42 = $       0 (ESTIMATE)
+TOMATO      discarded    0.0 units/episode x avg sale px    89 = $       0 (ESTIMATE)
+STRAWBERRY  discarded    0.0 units/episode x avg sale px   248 = $       0 (ESTIMATE)
+MELON       discarded    0.0 units/episode x avg sale px   246 = $       0 (ESTIMATE)
+EGG         discarded    0.0 units/episode x avg sale px     0 = $       0 (ESTIMATE)
+MILK        discarded    0.0 units/episode x avg sale px     0 = $       0 (ESTIMATE)
+WOOL        discarded    0.0 units/episode x avg sale px     0 = $       0 (ESTIMATE)
+TOTAL overflow discard loss ~$0/episode at mid-range prices (ESTIMATE). FERTILIZER discarded: 0/episode = $0 of bought fertilizer wasted (exact cost).
+
+==============================================================================
+11. END-OF-SEASON INVENTORY (value left on the farm; counts 0 toward the bank)
+==============================================================================
+WHEAT       shed    0.0 on-field    0.0 seeds    0.0 value@base $      1
+CARROT      shed    0.0 on-field    1.0 seeds    0.0 value@base $     35
+TOMATO      shed    0.0 on-field    0.1 seeds    0.0 value@base $      5
+STRAWBERRY  shed    0.0 on-field    1.9 seeds    0.0 value@base $    230
+MELON       shed    0.0 on-field    0.5 seeds    0.0 value@base $    125
+EGG         shed    0.0 on-field    0.0 seeds    0.0 value@base $      0
+MILK        shed    0.0 on-field    0.0 seeds    0.0 value@base $      0
+WOOL        shed    0.0 on-field    0.0 seeds    0.0 value@base $      0
+TOTAL unsold value @base prices: $    396 (avg; actual final-bank contribution = 0)
+
+==============================================================================
+12/13. PRODUCTION CAPACITY UTILIZATION + BOTTLENECK RANKING
+==============================================================================
+land utilization:    810 occupied /   1146 unlocked tile-days = 70.7%
+labor utilization:   1229 productive /   4194 available = 29.3% (idle 16.1%, movement 51.1%)
+crop WHEAT       tile-days     136 actual     82 theoretical≈    182 utilization   45% (theoretical = ESTIMATE, full water+fert)
+crop CARROT      tile-days      21 actual      4 theoretical≈     24 utilization   17% (theoretical = ESTIMATE, full water+fert)
+crop TOMATO      tile-days     101 actual     20 theoretical≈    202 utilization   10% (theoretical = ESTIMATE, full water+fert)
+crop STRAWBERRY  tile-days     170 actual     22 theoretical≈    170 utilization   13% (theoretical = ESTIMATE, full water+fert)
+crop MELON       tile-days     381 actual    174 theoretical≈    183 utilization   95% (theoretical = ESTIMATE, full water+fert)
+sales executed at the $1 floor: 0 units vs base worth ~$0 (ESTIMATE)
+
+==============================================================================
+15. CURRENT vs v5.2 DECOMPOSITION (24-seed averages)
+==============================================================================
+metric                          current       v5.2
+total revenue                     51088      71474
+total costs                        7266      40522
+strawberry rev                     4050      16370
+tomato rev                         1545        719
+melon rev                         42689      21386
+wheat rev                          2679      25745
+carrot rev                          126          0
+animal rev                            0       7255
+seed costs                         5617       3023
+fert costs                            0       5706
+hire costs                          482        550
+land costs                         1167          0
+endgame unsold value                396          0
+
+strawberry economics: current +170 tile-days, 22 produced, avg px 249; v5.2: +215 tile-days, 67 produced, avg px 276
+
+==============================================================================
+16. $40K -> $200K GAP ANALYSIS (data-based bounds)
+==============================================================================
+town absorbs   3168 units/game across all products; full absorption at base price = $304,402 (hard revenue bound if prices never moved).
+our actual revenue 51,088 => capture 17% of the drain-at-base bound.
+production bound: 1 quadrant = 25 tiles; with 100% labor we still produce far less than the drain; the binding constraints are labor + capital timing, not demand.
+implied ceiling: total revenue observed 51,088; if production ~4x (all 4 quadrants) and prices held, revenue ~$204,352 but the drain/price curve caps realistic revenue near $213,082 (ESTIMATE: 70% absorption at decayed prices).
+
+==============================================================================
+17. BOTTLENECK TREE (value-loss ranking, data-supported where noted)
+==============================================================================
+1. LABOR: idle 675 actions/game (~16%) x revenue/action $41.57 x 0.8 = ~$22,456/game (ESTIMATE)
+2. LAND: 336 unlocked-but-empty tile-days/game x revenue/tile-day $63.10 = ~$21,211/game (ESTIMATE; overlaps with labor)
+3. MARKET: floor-price sales $0 (ESTIMATE) + glut-depressed avg sale prices
+4. ENDGAME: unsold inventory $396 (at base) left at season end (0 bank value)
+5. CAPITAL: cash idles through the rebuild (see day-by-day cash curve evidence in ledgers)
+
+==============================================================================
+EXECUTIVE SUMMARY METRICS
+==============================================================================
+current avg final bank $46,822 | v5.2 $36,147 | gap +10,676
+avg total revenue $51,088 | avg total costs $7,266
+avg revenue/capital 7.06 | avg profit/capital 6.06
