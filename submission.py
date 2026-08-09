@@ -80,7 +80,7 @@ HARD_CAPS = {"WHEAT": 60, "CARROT": 30, "TOMATO": 10,
 ENDGAME_DAY   = 27
 SHED_FORCE    = 86
 ACTIONS_PER_HAND = 14
-HANDS_MAX     = 6
+HANDS_MAX     = 7
 
 # Realistic daily actions one hired hand performs once travel and queuing
 # are accounted for, as a fraction of the theoretical ceiling.
@@ -88,9 +88,9 @@ HAND_EFFICIENCY  = 0.55
 HAND_VALUE_MIN  = 6
 HIRE_HOUR_CUT = 12
 
-LAND_DAYS     = [4, 8, 14]
+LAND_DAYS     = [99, 99, 99]
 LAND_CASH     = [1000, 2000, 4000]
-LAND_LAST_DAY = 24
+LAND_LAST_DAY = 0
 
 LABOR_VALUE   = 3
 GLUT_FRACTION = 0.80
